@@ -459,3 +459,20 @@ show_image(0)
 # =========================================
 
 root.mainloop()
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Slideshow</title>
+    <style>
+        body { background: #0f172a; text-align: center; }
+        img { max-width: 900px; margin: 20px auto; }
+    </style>
+</head>
+<body>
+    <h1>📸 Image Slideshow</h1>
+    <img id="slideshow" src="images/image1.jpg" />
+    <script>
+        // Your slideshow logic here
+    </script>
+</body>
+</html>
