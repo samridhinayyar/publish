@@ -1,0 +1,3061 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FlowTrack — Portable Expense Tracker</title>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- SheetJS (xlsx) for Excel export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+  :root{
+    --bg-1: #0a0a0a;
+    --bg-2: #111111;
+    --card: rgba(255,255,255,0.04);
+    --glass: rgba(255,255,255,0.06);
+    --muted: #9fb3bf;
+    --text: #e9f6fb;
+    --accent1: #00d4aa; /* vibrant teal */
+    --accent2: #00b4d8; /* lighter teal */
+    --accent-grad: linear-gradient(90deg,var(--accent1),var(--accent2));
+    --radius: 14px;
+    --nav-h: 62px;
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  }
+  .light {
+    --bg-1: #f6f8fb;
+    --bg-2: #eef4fb;
+    --card: rgba(2,6,23,0.03);
+    --glass: rgba(255,255,255,0.85);
+    --muted: #526b78;
+    --text: #0b1720;
+  }
+  
+  body.light {
+    background: 
+      /* Graph paper pattern for light theme with teal */
+      linear-gradient(90deg, rgba(0,212,170,0.12) 1px, transparent 1px),
+      linear-gradient(rgba(0,212,170,0.12) 1px, transparent 1px),
+      /* Background gradients with teal */
+      radial-gradient(1200px 600px at 10% 20%, rgba(0,212,170,0.15), transparent 10%),
+      radial-gradient(900px 600px at 90% 80%, rgba(0,180,216,0.15), transparent 8%),
+      linear-gradient(160deg,var(--bg-1),var(--bg-2));
+    background-size: 20px 20px, 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background: 
+      /* Graph paper pattern with teal */
+      linear-gradient(90deg, rgba(0,212,170,0.08) 1px, transparent 1px),
+      linear-gradient(rgba(0,212,170,0.08) 1px, transparent 1px),
+      /* Background gradients with teal */
+      radial-gradient(1200px 600px at 10% 20%, rgba(0,212,170,0.1), transparent 10%),
+      radial-gradient(900px 600px at 90% 80%, rgba(0,180,216,0.1), transparent 8%),
+      linear-gradient(160deg,var(--bg-1),var(--bg-2));
+    background-size: 20px 20px, 20px 20px, 100% 100%, 100% 100%, 100% 100%;
+    color:var(--text);
+    display:flex;
+    justify-content:center;
+    padding:20px;
+    box-sizing:border-box;
+  }
+  .app {
+    width:100%;
+    max-width:1200px;
+    display:grid;
+    grid-template-rows: auto var(--nav-h) 1fr;
+    gap:20px;
+  }
+  
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.04);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(2,6,23,0.4);
+    font-size: 14px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  
+  .status-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  
+  .status-label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .status-value {
+    color: var(--text);
+    font-weight: 700;
+    font-size: 16px;
+  }
+  
+  @media (max-width: 768px) {
+    .status-bar {
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .status-item {
+      flex-direction: row;
+      gap: 8px;
+    }
+  }
+  .nav {
+    min-height:var(--nav-h);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:20px;
+    box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+    backdrop-filter: blur(8px) saturate(130%);
+    border:1px solid rgba(255,255,255,0.04);
+    position: relative;
+    overflow: visible;
+  }
+  
+  .nav::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  }
+  
+  .nav::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+  }
+  .nav-left{ 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    flex: 1;
+  }
+  
+  /* Navigation Menu Styling */
+  .nav-menu {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 20px;
+    flex-wrap: wrap;
+  }
+  
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+    position: relative;
+  }
+  
+  .nav-link:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.02);
+    border-color: rgba(255,255,255,0.04);
+    transform: translateY(-1px);
+  }
+  
+  .nav-link.active {
+    color: var(--accent1);
+    background: rgba(0,212,170,0.1);
+    border-color: rgba(0,212,170,0.2);
+  }
+  
+  .nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 2px;
+    background: var(--accent1);
+    border-radius: 1px;
+  }
+  
+  .nav-icon {
+    font-size: 16px;
+  }
+  
+  .nav-text {
+    white-space: nowrap;
+  }
+  
+  /* Responsive navigation */
+  /* Keep icons visible at all widths; only hide text on small screens */
+  @media (max-width: 1200px) {
+    .nav-link {
+      padding: 8px 12px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .nav-menu {
+      margin: 0 10px;
+      gap: 4px;
+    }
+    .nav-text { display: none; }
+    .nav-link {
+      padding: 6px 8px;
+    }
+  }
+  .brand {
+    display:flex; gap:10px; align-items:center;
+    padding:8px 10px; border-radius:12px; font-weight:700;
+    background: linear-gradient(90deg, rgba(255,255,255,0.02), transparent);
+  }
+  .logo { width:34px; height:34px; border-radius:8px; display:grid; place-items:center; background: linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.04); }
+  .nav-right{ 
+    display:flex; 
+    gap:12px; 
+    align-items:center; 
+  }
+  
+  /* Quick Actions Styling */
+  .quick-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  /* User Section Styling */
+  .user-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .user-profile:hover {
+    transform: translateY(-1px);
+  }
+  
+  .profile-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-grad);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #000;
+    font-weight: 700;
+  }
+  
+  .profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .profile-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  
+  .profile-role {
+    font-size: 11px;
+    color: var(--accent1);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  /* Responsive user section */
+  @media (max-width: 768px) {
+    .profile-info {
+      display: none;
+    }
+    
+    .user-section {
+      padding: 8px;
+    }
+  }
+  
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  
+  .username {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  
+  .role {
+    color: var(--accent1);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .glass-btn{
+    background:var(--glass);
+    border:none;
+    padding:8px 12px;
+    border-radius:12px;
+    color:var(--text);
+    cursor:pointer;
+    font-weight:600;
+    display:inline-flex;
+    gap:8px;
+    align-items:center;
+    transition:all .18s ease;
+  }
+  .glass-btn:hover{ transform:translateY(-3px); box-shadow: 0 10px 30px rgba(6,182,212,0.06); }
+  
+  /* Voice button special styling */
+  #voiceBtn.listening {
+    background: var(--accent-grad);
+    color: #000;
+    font-weight: 700;
+    transform: scale(1.05);
+    box-shadow: 0 8px 32px rgba(0,212,170,0.4);
+  }
+  
+  #voiceBtn.listening:hover {
+    transform: scale(1.05) translateY(-3px);
+  }
+  .search { 
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02)); 
+    border-radius:999px; 
+    padding:6px 10px; 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    border:1px solid rgba(255,255,255,0.04);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+  
+  .search:focus-within {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 3px rgba(6,182,212,0.1);
+    transform: scale(1.02);
+  }
+  
+  .search input{ 
+    background:transparent; 
+    border:0; 
+    outline:none; 
+    color:var(--text); 
+    width:180px; 
+    font-size: 14px;
+    transition: all 0.2s ease;
+  }
+  
+  .search input::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+  
+  .search input:focus::placeholder {
+    opacity: 0.4;
+  }
+  
+  .search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--glass);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 12px;
+    margin-top: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(2,6,23,0.6);
+    display: none;
+    z-index: 1000;
+  }
+  
+  .search-suggestions.show {
+    display: block;
+  }
+  
+  .search-suggestion {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+    transition: background 0.2s ease;
+  }
+  
+  .search-suggestion:hover {
+    background: rgba(255,255,255,0.02);
+  }
+  
+  .search-suggestion:last-child {
+    border-bottom: none;
+  }
+  
+  .search-suggestion .highlight {
+    color: var(--accent2);
+    font-weight: 600;
+  }
+  .main { display:grid; grid-template-columns: 1fr 360px; gap:20px; align-items:start; }
+  @media (max-width:1000px){ .main { grid-template-columns: 1fr; } }
+  .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:18px; padding:18px; border:1px solid rgba(255,255,255,0.04); box-shadow: 0 8px 30px rgba(2,6,23,0.6); backdrop-filter: blur(8px) saturate(120%); }
+  .top-row { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:14px; }
+  .tabs { display:flex; gap:10px; flex-wrap:wrap; }
+  .tab { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:10px 16px; border-radius:999px; cursor:pointer; font-weight:600; border:1px solid rgba(255,255,255,0.04); transition:transform .14s ease, box-shadow .14s; }
+  .tab:hover{ transform:translateY(-3px); }
+  .tab.active{ background:var(--accent-grad); color:#041119; box-shadow: 0 12px 40px rgba(6,182,212,0.06); }
+  .action-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .primary { background:var(--glass); padding:10px 14px; border-radius:12px; border: none; cursor:pointer; font-weight:700; }
+  .primary.accent { background:var(--accent-grad); color:#041119; }
+  .table-wrap{ overflow:auto; margin-top:8px; border-radius:12px; }
+  table { width:100%; border-collapse:collapse; min-width:720px; }
+  th,td{ padding:12px 14px; text-align:left; font-size:0.95rem; color:var(--text); }
+  th{ color:var(--muted); font-weight:600; font-size:0.88rem; border-bottom:1px solid rgba(255,255,255,0.03); }
+  tr:nth-child(even){ background: rgba(255,255,255,0.01); }
+  .widget { display:flex; flex-direction:column; gap:12px; }
+  .export-box { 
+    padding: 20px; 
+    border-radius: 16px; 
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)); 
+    border: 1px solid rgba(255,255,255,0.06); 
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    backdrop-filter: blur(12px);
+  }
+  
+  .export-box > div {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent1);
+    margin-bottom: 16px;
+    text-align: center;
+    padding: 12px;
+    background: rgba(0,212,170,0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(0,212,170,0.2);
+  }
+  
+  .export-box button{ 
+    width: 100%; 
+    padding: 12px 16px; 
+    border-radius: 12px; 
+    border: none; 
+    cursor: pointer; 
+    font-weight: 700; 
+    background: var(--accent-grad); 
+    color: #000; 
+    margin-top: 12px; 
+    transition: all 0.3s ease;
+    font-size: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .export-box button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,212,170,0.3);
+  }
+  
+  .export-box button:active {
+    transform: translateY(0);
+  }
+  
+  .export-box button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+  }
+  
+  .export-box button:hover::before {
+    left: 100%;
+  }
+  
+  #exportXlsx {
+    background: linear-gradient(135deg, #00b4d8, #0096c7);
+    opacity: 0.8;
+  }
+  
+  #exportXlsx:hover {
+    opacity: 1;
+    background: linear-gradient(135deg, #00c4e0, #00a8d8);
+  }
+  
+  /* File Storage Styling */
+  .file-storage {
+    margin-top: 16px;
+  }
+  
+  .file-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: all 0.2s ease;
+  }
+  
+  .file-item:hover {
+    background: rgba(255,255,255,0.04);
+    border-color: var(--accent1);
+  }
+  
+  .file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .file-name {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 14px;
+  }
+  
+  .file-meta {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  
+  .file-actions {
+    display: flex;
+    gap: 6px;
+  }
+  
+  .file-btn {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  
+  .file-btn.download {
+    background: var(--accent1);
+    color: #000;
+  }
+  
+  .file-btn.edit {
+    background: var(--accent2);
+    color: #000;
+  }
+  
+  .file-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,212,170,0.3);
+  }
+  
+  .no-files {
+    text-align: center;
+    color: var(--muted);
+    font-style: italic;
+    padding: 20px;
+  }
+  
+  /* Financial Suite Overview Styling */
+  .financial-suite-overview {
+    margin-top: 20px;
+  }
+  
+  .suite-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+  
+  .feature-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0,212,170,0.1), transparent);
+    transition: left 0.5s;
+  }
+  
+  .feature-card:hover::before {
+    left: 100%;
+  }
+  
+  .feature-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent1);
+    box-shadow: 0 12px 40px rgba(0,212,170,0.2);
+  }
+  
+  .feature-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  
+  .feature-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  
+  .feature-desc {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  
+  /* Responsive feature cards */
+  @media (max-width: 768px) {
+    .suite-features {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    .feature-card {
+      padding: 16px;
+    }
+    
+    .feature-icon {
+      font-size: 36px;
+    }
+  }
+  
+  /* CSV and Excel Editor Modal Styling */
+  .csv-editor-modal,
+  .excel-editor-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+  }
+  
+  .csv-editor-content,
+  .excel-editor-content {
+    background: var(--glass);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    backdrop-filter: blur(20px);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .csv-editor-header,
+  .excel-editor-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .csv-editor-header h3,
+  .excel-editor-header h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 700;
+  }
+  
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+  }
+  
+  .close-btn:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.06);
+  }
+  
+  .csv-editor-body,
+  .excel-editor-body {
+    padding: 20px 24px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  
+  .csv-editor-footer,
+  .excel-editor-footer {
+    padding: 16px 24px 20px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+  }
+  
+  /* Excel Editor Specific Styles */
+  .excel-editor-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+    font-weight: 600;
+  }
+  
+  .tab-btn:hover {
+    color: var(--text);
+  }
+  
+  .tab-btn.active {
+    color: var(--accent1);
+    border-bottom-color: var(--accent1);
+  }
+  
+  .tab-content {
+    display: none;
+  }
+  
+  .tab-content.active {
+    display: block;
+  }
+  
+  .excel-table {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  
+  .excel-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .excel-table th,
+  .excel-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  
+  .excel-table th {
+    background: rgba(255,255,255,0.02);
+    font-weight: 600;
+    color: var(--muted);
+  }
+  
+  .excel-table input,
+  .excel-table select {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    width: 100%;
+    padding: 4px;
+    border-radius: 4px;
+  }
+  
+  .excel-table input:focus,
+  .excel-table select:focus {
+    background: rgba(255,255,255,0.06);
+    outline: none;
+  }
+  
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+  }
+  
+  .summary-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .summary-card h4 {
+    margin: 0 0 12px 0;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  
+  .summary-value {
+    color: var(--accent1);
+    font-size: 24px;
+    font-weight: 700;
+  }
+  
+  .excel-charts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  
+  @media (max-width: 768px) {
+    .excel-charts {
+      grid-template-columns: 1fr;
+    }
+    
+    .summary-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+  .form-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  @media (max-width:700px){ .form-grid{ grid-template-columns:1fr; } }
+  input, select, textarea { width:100%; padding:10px 12px; border-radius:10px; background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:var(--text); outline:none; }
+  .small { font-size:0.86rem; color:var(--muted); }
+  .charts { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+  @media (max-width:800px){ .charts{ grid-template-columns:1fr; } }
+  canvas{ width:100% !important; height:220px !important; border-radius:12px; background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); padding:8px; }
+  .favorites { display:flex; gap:8px; flex-wrap:wrap; }
+  .muted { color:var(--muted); font-size:0.9rem; }
+  .liquid { position:relative; overflow:hidden; border-radius:12px; }
+  .liquid::after{ content:""; position:absolute; top:-50%; left:-20%; width:120px;height:120px; border-radius:50%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.06), transparent 30%), linear-gradient(90deg,var(--accent1),var(--accent2)); transform: translate(-40%,-20%) scale(.4); opacity:0; transition:all .35s ease; mix-blend-mode: screen; }
+  .liquid:hover::after{ transform: translate(0,0) scale(1); opacity:0.95; filter: blur(6px); }
+  
+  /* Floating Action Button */
+  .fab {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--accent-grad);
+    border: none;
+    color: #000;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 8px 32px rgba(0,212,170,0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 40px rgba(0,212,170,0.4);
+    background: linear-gradient(135deg, #00e6b8, #00c4e0);
+  }
+  
+  .fab:active {
+    transform: scale(0.95);
+  }
+  
+  .fab-expanded {
+    width: auto;
+    height: auto;
+    min-width: 200px;
+    min-height: 60px;
+    border-radius: 30px;
+    padding: 0 20px;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0,212,170,0.3);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  }
+  
+  .fab-expanded .fab-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  
+  .fab-expanded .fab-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 20px;
+    background: rgba(0,212,170,0.1);
+    border: 1px solid rgba(0,212,170,0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+  }
+  
+  .fab-expanded .fab-item:hover {
+    background: rgba(0,212,170,0.2);
+    border-color: rgba(0,212,170,0.4);
+    transform: translateY(-2px);
+  }
+  
+  .fab-expanded .fab-item .icon {
+    font-size: 18px;
+  }
+  
+  /* Voice button pulse animation */
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(0, 212, 170, 0.7);
+    }
+    70% {
+      transform: scale(1.05);
+      box-shadow: 0 0 0 10px rgba(0, 212, 170, 0);
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(0, 212, 170, 0);
+    }
+  }
+  
+  /* Enhanced Safari-style navigation */
+  .nav {
+    position: sticky;
+    top: 20px;
+    z-index: 100;
+  }
+  
+  /* Improved card shadows */
+  .card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(2,6,23,0.8);
+  }
+  .toast { 
+    position:fixed; 
+    bottom:18px; 
+    right:18px; 
+    background:var(--glass); 
+    padding:10px 14px; 
+    border-radius:10px; 
+    border:1px solid rgba(255,255,255,0.04); 
+    display:none; 
+    max-width:400px;
+    word-wrap:break-word;
+    z-index:10000;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  
+  .toast-comparison { 
+    background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(255,122,24,0.1));
+    border-color: rgba(6,182,212,0.2);
+  }
+  
+  .toast-success { 
+    background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(6,182,212,0.1));
+    border-color: rgba(34,197,94,0.2);
+  }
+  
+  .toast-error { 
+    background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(255,122,24,0.1));
+    border-color: rgba(239,68,68,0.2);
+  }
+  
+  .toast-info { 
+    background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(99,102,241,0.1));
+    border-color: rgba(6,182,212,0.2);
+  }
+  .btn-icon { background:transparent; border:0; cursor:pointer; color:var(--muted); padding:6px; border-radius:8px; }
+  .btn-icon:hover{ color:var(--text); background: rgba(255,255,255,0.02); }
+  @media (max-width:560px){ .search input{ width:100px; } .table-wrap table{ min-width:600px; } }
+
+  /* Modal centered */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(2,6,23,0.6); display:none; align-items:center; justify-content:center; z-index:9999; padding:16px; }
+  .modal { width:100%; max-width:640px; border-radius:18px; background:var(--glass); margin:0 auto; padding:16px; transform:scale(0.96); transition:transform .24s cubic-bezier(.22,.9,.26,1), opacity .2s; opacity:0; box-shadow: 0 20px 60px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.06); }
+  .modal.show { transform:scale(1); opacity:1; }
+  .modal-handle { width:56px; height:6px; background:rgba(255,255,255,0.08); border-radius:999px; margin:0 auto 12px; display:block; }
+
+  /* small responsive for bottom */
+  @media (max-width:420px){ .modal{ padding:12px; } .card{ padding:12px;} }
+</style>
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label">Total Expenses:</span>
+        <span class="status-value" id="totalExpenses">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">This Month:</span>
+        <span class="status-value" id="monthlyTotal">₹0.00</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Top Category:</span>
+        <span class="status-value" id="topCategory">—</span>
+      </div>
+    </div>
+    
+    <!-- NAV -->
+    <div class="nav">
+      <div class="nav-left">
+        <div class="brand liquid">
+          <div class="logo">💰</div>
+          <div style="display:flex;flex-direction:column;">
+            <div style="font-weight:700;">FlowTrack</div>
+            <div style="font-size:12px;color:var(--accent1);">Financial Management Suite</div>
+          </div>
+        </div>
+        
+        <!-- Main Navigation Menu -->
+        <nav class="nav-menu">
+          <a href="#dashboard" class="nav-link active" data-section="dashboard">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">Dashboard</span>
+          </a>
+          <a href="#expenses" class="nav-link" data-section="expenses">
+            <span class="nav-icon">💸</span>
+            <span class="nav-text">Expenses</span>
+          </a>
+          <a href="#budgets" class="nav-link" data-section="budgets">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-text">Budgets</span>
+          </a>
+          <a href="#investments" class="nav-link" data-section="investments">
+            <span class="nav-icon">📈</span>
+            <span class="nav-text">Investments</span>
+          </a>
+          <a href="#goals" class="nav-link" data-section="goals">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-text">Goals</span>
+          </a>
+          <a href="#reports" class="nav-link" data-section="reports">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">Reports</span>
+          </a>
+        </nav>
+        
+        <div class="search" style="display:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="1.5"/></svg>
+          <input id="globalSearch" placeholder="Search across all financial data..." />
+          <div class="search-suggestions" id="searchSuggestions"></div>
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+          <button class="glass-btn liquid" id="voiceBtn" title="Voice / AI prompt - Click to start listening">🎤 Voice</button>
+          <button class="glass-btn" id="savedFiltersBtn" title="Saved filters">★ Saved</button>
+          <button class="glass-btn" id="notificationsBtn" title="Notifications">🔔</button>
+          <button class="glass-btn" id="settingsBtn" title="Settings">⚙️</button>
+        </div>
+        
+        <!-- User Profile & Theme -->
+        <div class="user-section">
+          <button class="glass-btn" id="themeToggle" title="Toggle theme (Alt+T)">🌓 Theme</button>
+          <button class="glass-btn" id="shortcutsBtn" title="Keyboard shortcuts (Alt+/)">⌨️ Shortcuts</button>
+          <div class="user-profile">
+            <div class="profile-avatar">👤</div>
+            <div class="profile-info">
+              <div class="profile-name">Admin User</div>
+              <div class="profile-role">Premium</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+      <!-- LEFT -->
+      <div class="card">
+        <div class="top-row">
+          <div>
+            <div style="font-size:20px;font-weight:800">Financial Dashboard</div>
+            <div class="small">Comprehensive financial management - expenses, budgets, investments & goals</div>
+          </div>
+
+          <div class="tabs" id="categoryTabs"></div>
+        </div>
+
+        <div class="action-row">
+          <button class="primary accent" id="openAdd">+ Add Expense</button>
+          <button class="glass-btn" id="openCharts" title="View Charts (Alt+G)">📊 Charts</button>
+
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <div class="small">Filters:</div>
+            <select id="filterCategory"><option value="">All categories</option></select>
+            <select id="filterBrand"><option value="">All brands</option></select>
+            <input type="date" id="filterFrom" />
+            <input type="date" id="filterTo" />
+            <button class="primary" id="applyFilters">Apply</button>
+            <button class="primary" id="saveFilter">Save Filter</button>
+          </div>
+        </div>
+
+        <div class="table-wrap" id="tableWrap">
+          <table id="expenseTable" aria-live="polite">
+            <thead>
+              <tr><th>Date</th><th>Category</th><th>Brand</th><th>Amount</th><th>Notes</th><th style="text-align:right">Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="charts" style="display:none;">
+          <div class="card" style="padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-weight:700">Spending by Category</div>
+              <div class="muted small">All data</div>
+            </div>
+            <canvas id="chartCategory"></canvas>
+          </div>
+
+          <div class="card" style="padding:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-weight:700">Spending by Brand</div>
+              <div class="muted small">Top brands</div>
+            </div>
+            <canvas id="chartBrand"></canvas>
+          </div>
+
+          <div class="card" style="padding:12px; grid-column: 1 / -1;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-weight:700">Monthly Spend</div>
+              <div class="muted small">Amounts per month</div>
+            </div>
+            <canvas id="chartMonth"></canvas>
+          </div>
+        </div>
+        
+        <!-- Financial Suite Overview -->
+        <div class="financial-suite-overview">
+          <div class="card" style="grid-column: 1 / -1; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <div style="font-size: 24px; font-weight: 800; color: var(--accent1); margin-bottom: 8px;">
+                🚀 FlowTrack Financial Suite
+              </div>
+              <div style="color: var(--muted); font-size: 16px;">
+                Your complete financial management solution
+              </div>
+            </div>
+            
+            <div class="suite-features">
+              <div class="feature-card">
+                <div class="feature-icon">💸</div>
+                <div class="feature-title">Expense Tracking</div>
+                <div class="feature-desc">Smart categorization, receipt scanning, and spending insights</div>
+              </div>
+              
+              <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-title">Budget Management</div>
+                <div class="feature-desc">Set limits, track progress, and get alerts when approaching limits</div>
+              </div>
+              
+              <div class="feature-card">
+                <div class="feature-icon">📈</div>
+                <div class="feature-title">Investment Portfolio</div>
+                <div class="feature-desc">Track stocks, crypto, and other investments with real-time data</div>
+              </div>
+              
+              <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-title">Financial Goals</div>
+                <div class="feature-desc">Set savings targets, track progress, and celebrate milestones</div>
+              </div>
+              
+              <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">Advanced Analytics</div>
+                <div class="feature-desc">AI-powered insights, trend analysis, and financial recommendations</div>
+              </div>
+              
+              <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <div class="feature-title">Secure & Private</div>
+                <div class="feature-desc">Bank-level security with end-to-end encryption</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT -->
+      <div class="widget">
+        <div class="card export-box">
+          <div>📊 Export Data</div>
+          <div style="font-size: 14px; color: var(--muted); margin-bottom: 16px; text-align: center; line-height: 1.4;">
+            Export your expense data in different formats for analysis and reporting
+          </div>
+          <button id="exportCsv" style="display:none;">📄 Export to CSV</button>
+          <button id="exportXlsx" style="display:none;">📊 Export to Excel (Admin Only)</button>
+          <div id="exportNote" class="muted small" style="text-align:center;margin-top:12px;">Exports are admin-only</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 12px; text-align: center; line-height: 1.3;">
+            CSV: Available to all users<br>
+            Excel: Advanced formatting with charts (Admin only)
+          </div>
+        </div>
+
+        <!-- File Storage Section -->
+        <div class="card file-storage">
+          <div style="font-weight:700;margin-bottom:12px;">📁 File Storage</div>
+          <div class="file-list" id="fileList">
+            <div class="no-files">No files stored yet. Export data to see files here.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-weight:700;margin-bottom:8px;">Quick Add</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <input type="date" id="q_date" />
+            <select id="q_category">
+              <option>Travel & Booking</option><option>Clothing</option><option>Groceries & General</option><option>Electronics</option><option>Other</option>
+            </select>
+            <input type="text" id="q_brand" placeholder="Brand (optional)"/>
+            <input type="number" id="q_amount" placeholder="Amount" step="0.01"/>
+            <textarea id="q_notes" rows="2" placeholder="Notes (optional)"></textarea>
+            <button class="primary accent" id="quickSave">Add Quickly</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:700">Saved Filters</div>
+            <button class="primary" id="clearSaved">Clear</button>
+          </div>
+          <div id="savedFiltersList" class="muted small" style="margin-top:8px;">No saved filters yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">Saved</div>
+    
+    <!-- Floating Action Button -->
+    <button class="fab" id="fab" title="Quick Actions" aria-label="Quick Actions">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Modal: Add / Edit (Instagram-like) -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <span class="modal-handle"></span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div>
+          <div id="modalTitle" style="font-weight:800">Add Expense</div>
+          <div class="small muted" id="modalSubtitle">Fill details below</div>
+        </div>
+        <div>
+          <button class="primary" id="closeModal">Close</button>
+        </div>
+      </div>
+
+      <form id="modalForm">
+        <div class="form-grid">
+          <input type="date" id="m_date" required />
+          <select id="m_category" required>
+            <option>Travel & Booking</option><option>Clothing</option><option>Groceries & General</option><option>Electronics</option><option>Other</option>
+          </select>
+          <input type="text" id="m_brand" placeholder="Brand (optional)"/>
+          <input type="number" id="m_amount" placeholder="Amount" step="0.01" required/>
+        </div>
+        <textarea id="m_notes" rows="3" placeholder="Notes (optional)"></textarea>
+        <div style="margin-top:8px;">
+          <label style="font-size:12px;color:var(--muted);font-weight:600;">Proof of Purchase (optional)</label>
+          <input type="file" id="m_proof" accept="image/*,.pdf" style="margin-top:4px;" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button type="submit" class="primary accent" id="saveModal">Save</button>
+          <button type="button" class="primary" id="resetModal">Reset</button>
+        </div>
+        <input type="hidden" id="m_editingId" />
+      </form>
+    </div>
+  </div>
+
+<script>
+/* ------------------------------
+   Authentication & Role Management
+   ------------------------------ */
+let currentUser = null;
+
+// Check authentication on page load
+async function checkAuth() {
+    try {
+        const userStr = localStorage.getItem('user');
+        if (!userStr) {
+            window.location.href = 'login.html';
+            return false;
+        }
+        currentUser = JSON.parse(userStr);
+        updateUIForUser();
+        // Redirect based on role
+        if (currentUser.role === 'admin') {
+            window.location.href = 'admin.html';
+            return false;
+        } else if (currentUser.role === 'user') {
+            window.location.href = 'user.html';
+            return false;
+        }
+        // Ping server; if unauthorized, go to login
+        const response = await fetch(`/api/expenses?username=${encodeURIComponent(currentUser.username)}`, { credentials: 'include' });
+        if (response.status === 401) {
+            window.location.href = 'login.html';
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.warn('Auth check failed, redirecting to login:', error);
+        window.location.href = 'login.html';
+        return false;
+    }
+}
+
+function updateUIForUser() {
+    if (!currentUser) return;
+    
+    // Update navigation to show user info
+    const navRight = document.querySelector('.nav-right');
+    const userInfo = document.createElement('div');
+    userInfo.className = 'user-info';
+    userInfo.innerHTML = `
+        <span class="username">👤 ${currentUser.username}</span>
+        <span class="role">${currentUser.role === 'admin' ? '👑 Admin' : '👷 Employee'}</span>
+        <button class="glass-btn" onclick="logout()">🚪 Logout</button>
+    `;
+    
+    // Insert before existing buttons
+    navRight.insertBefore(userInfo, navRight.firstChild);
+    
+    // Show/hide exports based on role
+    if (currentUser.role === 'admin') {
+        const excelBtn = document.getElementById('exportXlsx');
+        if (excelBtn) excelBtn.style.display = 'block';
+        const csvBtn = document.getElementById('exportCsv');
+        if (csvBtn) csvBtn.style.display = 'block';
+        const note = document.getElementById('exportNote');
+        if (note) note.style.display = 'none';
+    } else {
+        const excelBtn = document.getElementById('exportXlsx');
+        if (excelBtn) excelBtn.style.display = 'none';
+        const csvBtn = document.getElementById('exportCsv');
+        if (csvBtn) csvBtn.style.display = 'none';
+        const note = document.getElementById('exportNote');
+        if (note) note.style.display = 'block';
+    }
+}
+
+async function logout() {
+    try {
+        await fetch('/logout', { credentials: 'include' });
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+    } catch (error) {
+        console.error('Logout failed:', error);
+    }
+}
+
+/* ------------------------------
+   State & Storage
+   ------------------------------ */
+const LS_KEY = 'flowtrack_expenses_v1';
+const SETTINGS_KEY = 'flowtrack_settings_v1';
+
+// (Using consolidated utils and state functions defined later)
+
+/* ------------------------------
+   Enhanced Search Functionality
+   ------------------------------ */
+document.getElementById('globalSearch').addEventListener('input', debounce(function(e) {
+  const query = e.target.value.toLowerCase().trim();
+  if (query.length === 0) {
+    hideSearchSuggestions();
+    renderTable(); // Show all expenses
+    return;
+  }
+  
+  // Show search suggestions
+  showSearchSuggestions(query);
+  
+  // Filter expenses in real-time
+  const filteredExpenses = expenses.filter(expense => {
+    return (
+      expense.category.toLowerCase().includes(query) ||
+      (expense.brand && expense.brand.toLowerCase().includes(query)) ||
+      (expense.notes && expense.notes.toLowerCase().includes(query)) ||
+      expense.amount.toString().includes(query) ||
+      expense.date.includes(query)
+    );
+  });
+  
+  renderTable(filteredExpenses);
+}, 300));
+
+function showSearchSuggestions(query) {
+  const suggestions = [];
+  
+  // Add category suggestions
+  categories.forEach(cat => {
+    if (cat.toLowerCase().includes(query)) {
+      suggestions.push({
+        type: 'category',
+        text: cat,
+        query: cat
+      });
+    }
+  });
+  
+  // Add brand suggestions
+  const brands = [...new Set(expenses.map(e => e.brand).filter(Boolean))];
+  brands.forEach(brand => {
+    if (brand.toLowerCase().includes(query)) {
+      suggestions.push({
+        type: 'brand',
+        text: brand,
+        query: brand
+      });
+    }
+  });
+  
+  // Add amount suggestions
+  if (query.match(/^\d+$/)) {
+    suggestions.push({
+      type: 'amount',
+      text: `Amount: ₹${query}`,
+      query: query
+    });
+  }
+  
+  // Limit suggestions
+  suggestions.splice(5);
+  
+  const suggestionsEl = document.getElementById('searchSuggestions');
+  if (suggestions.length === 0) {
+    hideSearchSuggestions();
+    return;
+  }
+  
+  suggestionsEl.innerHTML = suggestions.map(s => `
+    <div class="search-suggestion" data-query="${s.query}">
+      <span class="highlight">${s.text}</span>
+    </div>
+  `).join('');
+  
+  suggestionsEl.classList.add('show');
+  
+  // Add click handlers
+  suggestionsEl.querySelectorAll('.search-suggestion').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('globalSearch').value = el.dataset.query;
+      hideSearchSuggestions();
+      renderTable();
+    });
+  });
+}
+
+function hideSearchSuggestions() {
+  document.getElementById('searchSuggestions').classList.remove('show');
+}
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search')) {
+    hideSearchSuggestions();
+  }
+});
+let expenses = [];
+let settings = { theme: (window.matchMedia && window.matchMedia('(prefers-color-scheme:light)').matches) ? 'light' : 'dark', savedFilters: [], customCategories: [] };
+const DEFAULT_CATEGORIES = ['Travel & Booking','Clothing','Groceries & General','Electronics','Other','Food & Dining','Health & Fitness','Utilities','Rent','Entertainment','Transport','Education','Subscriptions','Home & Living','Personal Care','Income','Savings','Taxes','Medical','Fuel','Restaurants','Pharmacy','Online Shopping'];
+let categories = [...DEFAULT_CATEGORIES];
+
+/* load / save */
+function loadState(){
+  try{
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    settings = Object.assign(settings, s || {});
+    const custom = Array.isArray(settings.customCategories) ? settings.customCategories : [];
+    const set = new Set([...(DEFAULT_CATEGORIES||[]), ...custom]);
+    categories = Array.from(set);
+    const raw = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+    expenses = Array.isArray(raw) ? raw : [];
+  }catch(e){ console.warn('loadState error',e); expenses=[]; }
+}
+function saveState(){
+  localStorage.setItem(LS_KEY, JSON.stringify(expenses));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+/* utils */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,9); }
+function toast(msg='Saved'){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',1500); }
+function escapeHtml(s){ if(!s) return ''; return s.toString().replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; }); }
+
+/* ------------------------------
+   Init
+   ------------------------------ */
+let chartCategory, chartBrand, chartMonth;
+async function init(){
+  // Check authentication first
+  const isAuthenticated = await checkAuth();
+  if (!isAuthenticated) return;
+  
+  loadState();
+  await syncWithServer();
+  applyTheme();
+  renderCategoryTabs();
+  populateCategorySelects();
+  populateFilterSelects();
+  prepareDefaults();
+  renderTable();
+  renderCharts();
+  renderSavedFilters();
+  wireEvents();
+  document.getElementById('globalSearch').addEventListener('input', debounce(renderTable, 300));
+  
+  // Initialize file storage
+  renderFileList();
+}
+async function syncWithServer(){
+  try{
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return;
+    const u = JSON.parse(userStr);
+    if (!u?.username) return;
+    const res = await fetch(`/api/expenses?username=${encodeURIComponent(u.username)}`, { credentials: 'include' });
+    if(!res.ok) return;
+    const serverItems = await res.json();
+    const byId = new Map(expenses.map(e=>[e.id,e]));
+    for(const it of serverItems){ if(!byId.has(it.id)) expenses.push({
+      id: it.id, date: it.date, category: it.category, brand: it.brand,
+      amount: Number(it.amount)||0, notes: it.notes, createdAt: it.created_at||new Date().toISOString()
+    }); }
+    saveState();
+  }catch(e){ console.warn('syncWithServer failed', e); }
+}
+function applyTheme(){
+  if(settings.theme === 'light') document.body.classList.add('light'); else document.body.classList.remove('light');
+  document.getElementById('themeToggle').textContent = settings.theme === 'light' ? '🌞' : '🌙';
+}
+
+/* ------------------------------
+   Category Tabs & selects
+   ------------------------------ */
+function renderCategoryTabs(){
+  const wrap = document.getElementById('categoryTabs');
+  wrap.innerHTML='';
+  categories.forEach(cat=>{
+    const btn = document.createElement('div');
+    btn.className='tab';
+    btn.textContent=cat;
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('filterCategory').value = cat;
+      renderTable();
+    });
+    wrap.appendChild(btn);
+  });
+}
+function populateCategorySelects(){
+  const modalCat = document.getElementById('m_category');
+  const quickCat = document.getElementById('q_category');
+  if (modalCat) {
+    const current = modalCat.value;
+    modalCat.innerHTML = categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if (current) modalCat.value = current;
+  }
+  if (quickCat) {
+    const currentQ = quickCat.value;
+    quickCat.innerHTML = categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if (currentQ) quickCat.value = currentQ;
+  }
+}
+function populateFilterSelects(){
+  const selCat = document.getElementById('filterCategory');
+  selCat.innerHTML = '<option value="">All categories</option>' + categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+  // brands from data
+  const brands = Array.from(new Set(expenses.map(e=>e.brand).filter(Boolean))).sort();
+  const selBrand = document.getElementById('filterBrand');
+  selBrand.innerHTML = '<option value="">All brands</option>' + brands.map(b=>`<option value="${b}">${b}</option>`).join('');
+}
+
+/* ------------------------------
+   Table render (with filtering & search)
+   ------------------------------ */
+function getFilteredData(){
+  const search = (document.getElementById('globalSearch')?.value||'').trim().toLowerCase();
+  const catFilter = document.getElementById('filterCategory')?.value;
+  const brandFilter = document.getElementById('filterBrand')?.value;
+  const from = document.getElementById('filterFrom')?.value;
+  const to = document.getElementById('filterTo')?.value;
+
+  return expenses.filter(e=>{
+    if(catFilter && e.category !== catFilter) return false;
+    if(brandFilter && e.brand !== brandFilter) return false;
+    if(from && e.date < from) return false;
+    if(to && e.date > to) return false;
+    if(search){
+      const s = `${e.date} ${e.category} ${e.brand||''} ${e.notes||''} ${e.amount}`.toLowerCase();
+      return s.includes(search);
+    }
+    return true;
+  }).sort((a,b)=> b.date.localeCompare(a.date) );
+}
+
+function renderTable(){
+  const tbody = document.querySelector('#expenseTable tbody');
+  tbody.innerHTML = '';
+  const data = getFilteredData();
+  if(data.length===0){
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">No expenses — add some using the form (top-right) or Quick Add.</td></tr>';
+  } else {
+    for(const e of data){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${e.date}</td>
+        <td>${escapeHtml(e.category||'')}</td>
+        <td>${escapeHtml(e.brand||'—')}</td>
+        <td>₹ ${Number(e.amount).toFixed(2)}</td>
+        <td>${escapeHtml(e.notes||'')}</td>
+        <td style="text-align:right">
+          <button class="btn-icon edit-btn" data-id="${e.id}" title="Edit">✏️</button>
+          <button class="btn-icon del-btn" data-id="${e.id}" title="Delete">🗑️</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+  
+  // Update status bar
+  updateStatusBar();
+  
+  populateFilterSelects();
+  renderCharts();
+}
+
+/* ------------------------------
+   Event Wiring
+   ------------------------------ */
+function wireEvents() {
+  // Wire edit and delete buttons
+  document.getElementById('expenseTable').addEventListener('click', function(ev) {
+    const editBtn = ev.target.closest('.edit-btn');
+    const deleteBtn = ev.target.closest('.del-btn');
+    
+    if (editBtn) {
+      const id = editBtn.dataset.id;
+      openModal(id);
+    }
+    
+    if (deleteBtn) {
+      const id = deleteBtn.dataset.id;
+      if (confirm('Are you sure you want to delete this expense?')) {
+        expenses = expenses.filter(e => e.id !== id);
+        saveState();
+        renderTable();
+        showAdvancedToast('🗑️ Expense deleted', 'success');
+      }
+    }
+  });
+  
+  // Wire add expense button
+  const addBtn = document.getElementById('openAdd');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => openModal());
+  }
+  
+  // Wire charts button
+  const chartsBtn = document.getElementById('openCharts');
+  if (chartsBtn) {
+    chartsBtn.addEventListener('click', () => {
+      const charts = document.querySelector('.charts');
+      if (charts) {
+        charts.style.display = charts.style.display === 'none' ? 'grid' : 'none';
+        if (charts.style.display === 'grid') {
+          renderCharts();
+        }
+      }
+    });
+  }
+  
+  // Wire voice button
+  const voiceBtn = document.getElementById('voiceBtn');
+  if (voiceBtn) {
+    voiceBtn.addEventListener('click', startVoice);
+  }
+  
+  // Wire navigation menu
+  const navLinks = document.querySelectorAll('.nav-link');
+  navLinks.forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      // Remove active class from all links
+      navLinks.forEach(l => l.classList.remove('active'));
+      
+      // Add active class to clicked link
+      this.classList.add('active');
+      
+      // Handle navigation (placeholder for future sections)
+      const section = this.dataset.section;
+      handleNavigation(section);
+    });
+  });
+  
+  // Wire new buttons
+  const notificationsBtn = document.getElementById('notificationsBtn');
+  if (notificationsBtn) {
+    notificationsBtn.addEventListener('click', showNotifications);
+  }
+  
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', showSettings);
+  }
+  
+  const userProfile = document.querySelector('.user-profile');
+  if (userProfile) {
+    userProfile.addEventListener('click', showUserMenu);
+  }
+}
+
+function updateStatusBar() {
+  // Reflect current filters/search in the status bar
+  const data = getFilteredData();
+  const totalExpenses = data.length;
+  const monthlyTotal = getCurrentMonthTotal(data);
+  const topCategory = getTopSpendingCategory(data);
+  
+  document.getElementById('totalExpenses').textContent = totalExpenses;
+  document.getElementById('monthlyTotal').textContent = `₹${monthlyTotal.toFixed(2)}`;
+  document.getElementById('topCategory').textContent = (topCategory && topCategory.name) || '—';
+}
+
+/* ------------------------------
+   Add / Edit / Delete (modal)
+   ------------------------------ */
+function openModal(editId=null){
+  const backdrop = document.getElementById('modalBackdrop');
+  const modal = backdrop.querySelector('.modal');
+  backdrop.style.display = 'flex';
+  // small delay to allow transition
+  requestAnimationFrame(()=> modal.classList.add('show'));
+  if(editId){
+    const rec = expenses.find(r=>r.id===editId);
+    if(rec){
+      document.getElementById('modalTitle').textContent = 'Edit Expense';
+      document.getElementById('modalSubtitle').textContent = 'Update the fields and save';
+      document.getElementById('m_date').value = rec.date;
+      document.getElementById('m_category').value = rec.category;
+      document.getElementById('m_brand').value = rec.brand || '';
+      document.getElementById('m_amount').value = rec.amount;
+      document.getElementById('m_notes').value = rec.notes || '';
+      document.getElementById('m_editingId').value = rec.id;
+    }
+  } else {
+    document.getElementById('modalTitle').textContent = 'Add Expense';
+    document.getElementById('modalSubtitle').textContent = 'Fill details below';
+    document.getElementById('modalForm').reset();
+    document.getElementById('m_editingId').value = '';
+    // default date to today
+    document.getElementById('m_date').value = (new Date()).toISOString().slice(0,10);
+  }
+  // focus first field
+  setTimeout(()=> document.getElementById('m_date').focus(), 160);
+}
+function closeModal(){
+  const backdrop = document.getElementById('modalBackdrop');
+  const modal = backdrop.querySelector('.modal');
+  modal.classList.remove('show');
+  setTimeout(()=> backdrop.style.display='none', 380);
+}
+
+document.getElementById('openAdd').addEventListener('click', ()=> openModal());
+document.getElementById('closeModal').addEventListener('click', closeModal);
+document.getElementById('resetModal').addEventListener('click', ()=>{ document.getElementById('modalForm').reset(); document.getElementById('m_editingId').value=''; });
+
+document.getElementById('modalForm').addEventListener('submit', async function(ev){
+  ev.preventDefault();
+  const id = document.getElementById('m_editingId').value || null;
+  const rec = {
+    id: id || uid(),
+    date: document.getElementById('m_date').value,
+    category: document.getElementById('m_category').value,
+    brand: document.getElementById('m_brand').value.trim(),
+    amount: Number(document.getElementById('m_amount').value) || 0,
+    notes: document.getElementById('m_notes').value.trim(),
+    createdAt: id ? (expenses.find(x=>x.id===id)?.createdAt || new Date().toISOString()) : new Date().toISOString()
+  };
+  if(!rec.date || !rec.category){ alert('Please enter required fields.'); return; }
+  if (!categories.includes(rec.category)) {
+    categories.push(rec.category);
+    settings.customCategories = Array.from(new Set([...(settings.customCategories||[]), rec.category]));
+    populateCategorySelects();
+    renderCategoryTabs();
+  }
+  if(id){
+    expenses = expenses.map(x=> x.id===id ? rec : x );
+    toast('Updated');
+  } else {
+    expenses.push(rec);
+    toast('Added');
+  }
+  saveState();
+  
+  // Persist to server and upload proof
+  try{
+    const userStr = localStorage.getItem('user');
+    const u = userStr ? JSON.parse(userStr) : null;
+    if(u?.username){
+      const fd = new FormData();
+      Object.entries({ id: rec.id, username: u.username, date: rec.date, category: rec.category, brand: rec.brand, amount: rec.amount, notes: rec.notes }).forEach(([k,v])=> fd.append(k, String(v??'')));
+      await fetch('/api/expenses', { method:'POST', body: fd });
+      
+      // Upload proof if file selected
+      const proofFile = document.getElementById('m_proof').files[0];
+      if (proofFile) {
+        const proofFd = new FormData();
+        proofFd.append('expense_id', rec.id);
+        proofFd.append('file', proofFile);
+        await fetch('/api/expenses/upload', { method:'POST', body: proofFd });
+        toast('Proof uploaded');
+      }
+    }
+  }catch(e){ console.warn('Server sync failed:', e); }
+  
+  closeModal();
+  renderTable();
+});
+
+/* Quick Add in right column */
+document.getElementById('quickSave').addEventListener('click', function(){
+  const rec = {
+    id: uid(),
+    date: document.getElementById('q_date').value || (new Date()).toISOString().slice(0,10),
+    category: document.getElementById('q_category').value,
+    brand: document.getElementById('q_brand').value.trim(),
+    amount: Number(document.getElementById('q_amount').value) || 0,
+    notes: document.getElementById('q_notes').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  if(!rec.date || !rec.category || !rec.amount){ alert('Please fill date, category and amount.'); return; }
+  if (!categories.includes(rec.category)) {
+    categories.push(rec.category);
+    settings.customCategories = Array.from(new Set([...(settings.customCategories||[]), rec.category]));
+    populateCategorySelects();
+    renderCategoryTabs();
+  }
+  expenses.push(rec); saveState(); renderTable(); toast('Added');
+  // Persist to server (best-effort)
+  try{
+    const userStr = localStorage.getItem('user');
+    const u = userStr ? JSON.parse(userStr) : null;
+    if(u?.username){
+      const fd = new FormData();
+      Object.entries({ id: rec.id, username: u.username, date: rec.date, category: rec.category, brand: rec.brand, amount: rec.amount, notes: rec.notes }).forEach(([k,v])=> fd.append(k, String(v??'')));
+      fetch('/api/expenses', { method:'POST', body: fd });
+    }
+  }catch(_){/* noop */}
+  // clear quick form
+  document.getElementById('q_amount').value=''; document.getElementById('q_brand').value=''; document.getElementById('q_notes').value='';
+});
+
+/* delegate edit/delete buttons */
+document.querySelector('#expenseTable tbody').addEventListener('click', function(ev){
+  const ed = ev.target.closest('.edit-btn');
+  if(ed){ const id = ed.dataset.id; openModal(id); return; }
+  const del = ev.target.closest('.del-btn');
+  if(del){ const id = del.dataset.id; if(confirm('Delete this expense?')){ expenses = expenses.filter(e=>e.id!==id); saveState(); renderTable(); toast('Deleted'); } return; }
+});
+
+/* ------------------------------
+   Exports
+   ------------------------------ */
+async function exportCsv(){
+  try {
+    const response = await fetch('/api/export/csv', {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FlowTrack_Expenses_${(new Date()).toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showAdvancedToast('✅ CSV exported successfully!', 'success');
+      
+      // Store in file storage
+      addToFileStorage(`FlowTrack_Expenses_${(new Date()).toISOString().slice(0,10)}.csv`, 'csv', 'CSV exported from server');
+    } else {
+      const error = await response.json();
+      showAdvancedToast(`❌ Export failed: ${error.error}`, 'error');
+    }
+  } catch (error) {
+    console.error('CSV export error:', error);
+    showAdvancedToast('❌ Export failed. Please try again.', 'error');
+  }
+}
+async function exportXlsx(){
+  // Check if user is admin
+  if (!currentUser || currentUser.role !== 'admin') {
+    showAdvancedToast('❌ Excel export is admin-only', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/export/excel', {
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FlowTrack_Expenses_${(new Date()).toISOString().slice(0,10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showAdvancedToast('✅ Excel file exported successfully!', 'success');
+      
+      // Store in file storage
+      addToFileStorage(`FlowTrack_Expenses_${(new Date()).toISOString().slice(0,10)}.xlsx`, 'xlsx', 'Excel exported from server');
+    } else {
+      const error = await response.json();
+      showAdvancedToast(`❌ Export failed: ${error.error}`, 'error');
+    }
+  } catch (error) {
+    console.error('Excel export error:', error);
+    showAdvancedToast('❌ Export failed. Please try again.', 'error');
+  }
+}
+document.getElementById('exportCsv').addEventListener('click', exportCsv);
+document.getElementById('exportXlsx').addEventListener('click', exportXlsx);
+
+// File storage management
+let storedFiles = JSON.parse(localStorage.getItem('flowtrack_files') || '[]');
+
+function addToFileStorage(filename, type, data) {
+  const file = {
+    id: Date.now().toString(),
+    name: filename,
+    type: type,
+    data: data,
+    createdAt: new Date().toISOString(),
+    size: data.length
+  };
+  
+  storedFiles.unshift(file);
+  if (storedFiles.length > 10) storedFiles.pop(); // Keep only last 10 files
+  
+  localStorage.setItem('flowtrack_files', JSON.stringify(storedFiles));
+  renderFileList();
+}
+
+function renderFileList() {
+  const fileList = document.getElementById('fileList');
+  
+  if (storedFiles.length === 0) {
+    fileList.innerHTML = '<div class="no-files">No files stored yet. Export data to see files here.</div>';
+    return;
+  }
+  
+  fileList.innerHTML = storedFiles.map(file => `
+    <div class="file-item" data-file-id="${file.id}">
+      <div class="file-info">
+        <div class="file-name">${file.name}</div>
+        <div class="file-meta">${file.type.toUpperCase()} • ${new Date(file.createdAt).toLocaleDateString()}</div>
+      </div>
+      <div class="file-actions">
+        <button class="file-btn download" onclick="downloadFile('${file.id}')">📥</button>
+        <button class="file-btn edit" onclick="editFile('${file.id}')">✏️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function downloadFile(fileId) {
+  const file = storedFiles.find(f => f.id === fileId);
+  if (!file) return;
+  
+  const blob = new Blob([file.data], { type: file.type === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  showAdvancedToast(`✅ Downloaded ${file.name}`, 'success');
+}
+
+function editFile(fileId) {
+  const file = storedFiles.find(f => f.id === fileId);
+  if (!file) return;
+  
+  if (file.type === 'csv') {
+    // Open CSV in editable format
+    openCsvEditor(file);
+  } else if (file.type === 'xlsx') {
+    // Open Excel in editable format
+    openExcelEditor(file);
+  }
+}
+
+function openCsvEditor(file) {
+  // Create CSV editor modal
+  const modal = document.createElement('div');
+  modal.className = 'csv-editor-modal';
+  modal.innerHTML = `
+    <div class="csv-editor-content">
+      <div class="csv-editor-header">
+        <h3>📊 CSV Editor - ${file.name}</h3>
+        <button class="close-btn" onclick="this.closest('.csv-editor-modal').remove()">✕</button>
+      </div>
+      <div class="csv-editor-body">
+        <textarea id="csvEditor" rows="20" style="width:100%; font-family: monospace; padding: 12px; border-radius: 8px; background: var(--bg-2); color: var(--text); border: 1px solid rgba(255,255,255,0.1);">${file.data}</textarea>
+      </div>
+      <div class="csv-editor-footer">
+        <button class="primary accent" onclick="saveCsvChanges('${file.id}')">💾 Save Changes</button>
+        <button class="primary" onclick="downloadCsvFromEditor('${file.id}')">📥 Download</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.getElementById('csvEditor').focus();
+}
+
+function openExcelEditor(file) {
+  try {
+    const data = JSON.parse(file.data);
+    
+    // Create Excel-style editor modal
+    const modal = document.createElement('div');
+    modal.className = 'excel-editor-modal';
+    modal.innerHTML = `
+      <div class="excel-editor-content">
+        <div class="excel-editor-header">
+          <h3>📈 Excel Editor - ${file.name}</h3>
+          <button class="close-btn" onclick="this.closest('.excel-editor-modal').remove()">✕</button>
+        </div>
+        <div class="excel-editor-tabs">
+          <button class="tab-btn active" onclick="switchExcelTab('expenses')">📋 Expenses</button>
+          <button class="tab-btn" onclick="switchExcelTab('summary')">📊 Summary</button>
+          <button class="tab-btn" onclick="switchExcelTab('charts')">📈 Charts</button>
+        </div>
+        <div class="excel-editor-body">
+          <div id="expensesTab" class="tab-content active">
+            <div class="excel-table">
+              <table>
+                <thead>
+                  <tr><th>Date</th><th>Category</th><th>Brand</th><th>Amount</th><th>Notes</th></tr>
+                </thead>
+                <tbody id="excelExpensesBody">
+                  ${data.expenses.map(e => `
+                    <tr>
+                      <td><input type="date" value="${e.date}" onchange="updateExcelExpense('${e.id}', 'date', this.value)"></td>
+                      <td><select onchange="updateExcelExpense('${e.id}', 'category', this.value)">
+                        ${categories.map(cat => `<option value="${cat}" ${cat === e.category ? 'selected' : ''}>${cat}</option>`).join('')}
+                      </select></td>
+                      <td><input type="text" value="${e.brand || ''}" onchange="updateExcelExpense('${e.id}', 'brand', this.value)"></td>
+                      <td><input type="number" step="0.01" value="${e.amount}" onchange="updateExcelExpense('${e.id}', 'amount', this.value)"></td>
+                      <td><input type="text" value="${e.notes || ''}" onchange="updateExcelExpense('${e.id}', 'notes', this.value)"></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div id="summaryTab" class="tab-content">
+            <div class="summary-cards">
+              <div class="summary-card">
+                <h4>📊 Total Expenses</h4>
+                <div class="summary-value">${data.metadata.totalExpenses}</div>
+              </div>
+              <div class="summary-card">
+                <h4>💰 Total Amount</h4>
+                <div class="summary-value">₹${data.metadata.totalAmount.toFixed(2)}</div>
+              </div>
+              <div class="summary-card">
+                <h4>📅 Export Date</h4>
+                <div class="summary-value">${new Date(data.metadata.exportDate).toLocaleDateString()}</div>
+              </div>
+            </div>
+          </div>
+          <div id="chartsTab" class="tab-content">
+            <div class="excel-charts">
+              <canvas id="excelChartCategory" width="400" height="200"></canvas>
+              <canvas id="excelChartBrand" width="400" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="excel-editor-footer">
+          <button class="primary accent" onclick="saveExcelChanges('${file.id}')">💾 Save Changes</button>
+          <button class="primary" onclick="downloadExcelFromEditor('${file.id}')">📥 Download Excel</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Initialize charts
+    setTimeout(() => {
+      renderExcelCharts(data.expenses);
+    }, 100);
+    
+  } catch (error) {
+    console.error('Error opening Excel editor:', error);
+    showAdvancedToast('❌ Error opening Excel editor', 'error');
+  }
+}
+
+// Excel editor helper functions
+function switchExcelTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  
+  // Show selected tab
+  document.getElementById(tabName + 'Tab').classList.add('active');
+  event.target.classList.add('active');
+}
+
+function updateExcelExpense(id, field, value) {
+  // This would update the expense in the editor
+  // For now, we'll just show a toast
+  showAdvancedToast(`Updated ${field} for expense ${id}`, 'info');
+}
+
+function renderExcelCharts(expenses) {
+  // Render charts in the Excel editor
+  const categoryCtx = document.getElementById('excelChartCategory');
+  const brandCtx = document.getElementById('excelChartBrand');
+  
+  if (categoryCtx && brandCtx) {
+    // Category chart
+    const categoryData = {};
+    expenses.forEach(e => {
+      categoryData[e.category] = (categoryData[e.category] || 0) + Number(e.amount);
+    });
+    
+    new Chart(categoryCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(categoryData),
+        datasets: [{
+          data: Object.values(categoryData),
+          backgroundColor: ['#00d4aa', '#00b4d8', '#0099cc', '#0077b6', '#023e8a']
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+    
+    // Brand chart
+    const brandData = {};
+    expenses.forEach(e => {
+      if (e.brand) {
+        brandData[e.brand] = (brandData[e.brand] || 0) + Number(e.amount);
+      }
+    });
+    
+    new Chart(brandCtx, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(brandData).slice(0, 8),
+        datasets: [{
+          label: 'Amount by Brand',
+          data: Object.values(brandData).slice(0, 8),
+          backgroundColor: '#00d4aa'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  }
+}
+
+function saveCsvChanges(fileId) {
+  const file = storedFiles.find(f => f.id === fileId);
+  if (!file) return;
+  
+  const newData = document.getElementById('csvEditor').value;
+  file.data = newData;
+  file.updatedAt = new Date().toISOString();
+  
+  localStorage.setItem('flowtrack_files', JSON.stringify(storedFiles));
+  showAdvancedToast('✅ CSV changes saved!', 'success');
+}
+
+function saveExcelChanges(fileId) {
+  const file = storedFiles.find(f => f.id === fileId);
+  if (!file) return;
+  
+  // Update the stored data with any changes
+  file.updatedAt = new Date().toISOString();
+  localStorage.setItem('flowtrack_files', JSON.stringify(storedFiles));
+  showAdvancedToast('✅ Excel changes saved!', 'success');
+}
+
+function downloadCsvFromEditor(fileId) {
+  const file = storedFiles.find(f => f.id === fileId);
+  if (!file) return;
+  
+  const data = document.getElementById('csvEditor').value;
+  const blob = new Blob([data], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.name;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  showAdvancedToast('✅ CSV downloaded!', 'success');
+}
+
+function downloadExcelFromEditor(fileId) {
+  const file = storedFiles.find(f => f.id === fileId);
+  if (!file) return;
+  
+  try {
+    const data = JSON.parse(file.data);
+    
+    // Create new Excel file with updated data
+    const ws_data = [['Date','Category','Brand','Amount (₹)','Notes']];
+    data.expenses.forEach(e => {
+      ws_data.push([e.date, e.category, e.brand || '—', e.amount, e.notes || '—']);
+    });
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+    
+    // Auto-size columns
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 30 }
+    ];
+    
+    XLSX.writeFile(wb, file.name);
+    showAdvancedToast('✅ Excel downloaded!', 'success');
+    
+  } catch (error) {
+    console.error('Download error:', error);
+    showAdvancedToast('❌ Download failed', 'error');
+  }
+}
+
+/* ------------------------------
+   Filters & Saved Filters
+   ------------------------------ */
+document.getElementById('applyFilters').addEventListener('click', renderTable);
+document.getElementById('saveFilter').addEventListener('click', function(){
+  const val = {
+    id: uid(), category: document.getElementById('filterCategory').value,
+    brand: document.getElementById('filterBrand').value,
+    from: document.getElementById('filterFrom').value, to: document.getElementById('filterTo').value,
+    name: `Filter ${new Date().toLocaleString()}`
+  };
+  settings.savedFilters = settings.savedFilters || [];
+  settings.savedFilters.push(val);
+  saveState();
+  renderSavedFilters();
+  toast('Filter saved');
+});
+function renderSavedFilters(){
+  const el = document.getElementById('savedFiltersList');
+  const arr = (settings.savedFilters || []);
+  if(arr.length===0){ el.textContent = 'No saved filters yet.'; return; }
+  el.innerHTML = arr.map(f=>`<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px">
+    <div><strong>${escapeHtml(f.name)}</strong><div class="small muted">${escapeHtml([f.category,f.brand,f.from,f.to].filter(Boolean).join(' • '))}</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="primary apply-saved" data-id="${f.id}">Apply</button>
+      <button class="primary delete-saved" data-id="${f.id}">Delete</button>
+    </div>
+  </div>`).join('');
+}
+document.getElementById('savedFiltersList').addEventListener('click', function(ev){
+  const ap = ev.target.closest('.apply-saved');
+  if(ap){ const id = ap.dataset.id; applySaved(id); return; }
+  const del = ev.target.closest('.delete-saved');
+  if(del){ const id = del.dataset.id; removeSaved(id); return; }
+});
+function applySaved(id){
+  const f = (settings.savedFilters||[]).find(s=>s.id===id); if(!f) return;
+  document.getElementById('filterCategory').value = f.category || '';
+  document.getElementById('filterBrand').value = f.brand || '';
+  document.getElementById('filterFrom').value = f.from || '';
+  document.getElementById('filterTo').value = f.to || '';
+  renderTable();
+}
+function removeSaved(id){
+  settings.savedFilters = (settings.savedFilters||[]).filter(s=>s.id!==id);
+  saveState(); renderSavedFilters();
+}
+document.getElementById('clearSaved').addEventListener('click', ()=>{ if(confirm('Clear all saved filters?')){ settings.savedFilters=[]; saveState(); renderSavedFilters(); } });
+document.getElementById('savedFiltersBtn').addEventListener('click', ()=>{ document.getElementById('savedFiltersList').scrollIntoView({behavior:'smooth'}); });
+
+/* ------------------------------
+   Charts
+   ------------------------------ */
+function renderCharts(){
+  // Charts should reflect filtered data
+  const data = getFilteredData();
+  const sumByCat = {};
+  const sumByBrand = {};
+  const sumByMonth = {};
+  for(const e of data){
+    const cat = e.category || 'Other';
+    sumByCat[cat] = (sumByCat[cat]||0) + Number(e.amount || 0);
+    const b = e.brand || '—';
+    sumByBrand[b] = (sumByBrand[b]||0) + Number(e.amount || 0);
+    const mo = (e.date||'').slice(0,7) || 'Unknown';
+    sumByMonth[mo] = (sumByMonth[mo]||0) + Number(e.amount || 0);
+  }
+
+  const catLabels = Object.keys(sumByCat);
+  const catData = catLabels.map(l=>sumByCat[l]);
+
+  const brandLabels = Object.keys(sumByBrand).sort((a,b)=> sumByBrand[b]-sumByBrand[a]).slice(0,8);
+  const brandData = brandLabels.map(l=>sumByBrand[l]);
+
+  const monthLabels = Object.keys(sumByMonth).sort();
+  const monthData = monthLabels.map(m=>sumByMonth[m]);
+
+  const catCtx = document.getElementById('chartCategory');
+  const brCtx = document.getElementById('chartBrand');
+  const moCtx = document.getElementById('chartMonth');
+  if(!catCtx || !brCtx || !moCtx){ return; }
+
+  if(chartCategory) chartCategory.destroy();
+  chartCategory = new Chart(catCtx, { type:'doughnut', data:{ labels:catLabels, datasets:[{ data:catData, backgroundColor: generateGradientColors(catLabels.length) }] }, options:{ plugins:{legend:{position:'bottom'}}, responsive:true } });
+
+  if(chartBrand) chartBrand.destroy();
+  chartBrand = new Chart(brCtx, { type:'bar', data:{ labels:brandLabels, datasets:[{ label:'Spend', data:brandData, backgroundColor: generateGradientColors(brandLabels.length) }] }, options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, responsive:true } });
+
+  if(chartMonth) chartMonth.destroy();
+  chartMonth = new Chart(moCtx, { type:'line', data:{ labels:monthLabels, datasets:[{ label:'Monthly Spend', data:monthData, tension:0.3, fill:true, backgroundColor: gradientForCanvas(moCtx, 'rgba(6,182,212,0.12)'), borderColor:'rgba(6,182,212,0.9)', pointRadius:4 }] }, options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}, responsive:true } });
+}
+
+function generateGradientColors(n){
+  const c1 = [255,122,24], c2 = [6,182,212];
+  const out=[];
+  for(let i=0;i<Math.max(1,n);i++){
+    const t = n<=1?0.5:(i/(n-1));
+    const r = Math.round(c1[0]*(1-t)+c2[0]*t), g=Math.round(c1[1]*(1-t)+c2[1]*t), b=Math.round(c1[2]*(1-t)+c2[2]*t);
+    out.push(`rgba(${r},${g},${b},0.85)`);
+  }
+  return out;
+}
+function gradientForCanvas(canvas, color){
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createLinearGradient(0,0,0,200);
+  g.addColorStop(0, color);
+  g.addColorStop(1,'rgba(4,17,25,0)');
+  return g;
+}
+
+/* ------------------------------
+   Voice / Speech commands
+   ------------------------------ */
+
+function handleVoiceCommand(text){
+  console.log('Processing voice command:', text);
+  
+  if (!text || text.trim().length === 0) {
+    showAdvancedToast('❌ No voice input detected. Please try again.', 'error');
+    return;
+  }
+  
+  // Enhanced intent parsing with better natural language understanding
+  const lowerText = text.toLowerCase().trim();
+  
+  // Comparison commands
+  if(lowerText.includes('compare') || lowerText.includes('versus') || lowerText.includes('vs') || lowerText.includes('difference')){
+    const found = categories.filter(c => {
+      const catLower = c.toLowerCase();
+      return lowerText.includes(catLower.split(' ')[0]) || lowerText.includes(catLower) || 
+             lowerText.includes(catLower.replace(' & ', ' ').split(' ')[0]);
+    });
+    
+    if(found.length >= 2){
+      const a = found[0], b = found[1];
+      const totA = sumByCategoryName(a), totB = sumByCategoryName(b);
+      const diff = totA - totB;
+      const percentage = totA > 0 ? ((totB / totA) * 100) : 0;
+      
+      const message = `📊 Comparison Results:\n\n` +
+                     `💰 ${a}: ₹${totA.toFixed(2)}\n` +
+                     `💰 ${b}: ₹${totB.toFixed(2)}\n\n` +
+                     `📈 Difference: ₹${Math.abs(diff).toFixed(2)} ${diff >= 0 ? 'more' : 'less'}\n` +
+                     `📊 ${b} is ${percentage.toFixed(1)}% of ${a}`;
+      
+      showAdvancedToast(message, 'comparison');
+      return;
+    } else if(found.length === 1) {
+      const cat = found[0];
+      const total = sumByCategoryName(cat);
+      const monthlyAvg = getMonthlyAverage(cat);
+      showAdvancedToast(`📊 ${cat} Summary:\n\n💰 Total: ₹${total.toFixed(2)}\n📅 Monthly Average: ₹${monthlyAvg.toFixed(2)}`, 'info');
+      return;
+    } else {
+      showAdvancedToast('❌ Please mention categories to compare (e.g., "compare travel and groceries")', 'error');
+      return;
+    }
+  }
+
+  // UI visibility commands for search bar
+  if (lowerText.includes('hide search') || lowerText.includes('remove search')) {
+    const s = document.querySelector('.search');
+    if (s) s.style.display = 'none';
+    showAdvancedToast('🔎 Search bar hidden', 'success');
+    return;
+  }
+  if (lowerText.includes('show search')) {
+    const s = document.querySelector('.search');
+    if (s) s.style.display = '';
+    showAdvancedToast('🔎 Search bar shown', 'success');
+    return;
+  }
+
+  // Spending analysis commands
+  if(lowerText.includes('spending') || lowerText.includes('spent') || lowerText.includes('total')){
+    if(lowerText.includes('month') || lowerText.includes('this month')){
+      const monthlyTotal = getCurrentMonthTotal();
+      const lastMonthTotal = getLastMonthTotal();
+      const change = monthlyTotal - lastMonthTotal;
+      const changePercent = lastMonthTotal > 0 ? ((change / lastMonthTotal) * 100) : 0;
+      
+      showAdvancedToast(`📅 This Month's Spending:\n\n💰 Total: ₹${monthlyTotal.toFixed(2)}\n📊 vs Last Month: ${change >= 0 ? '+' : ''}₹${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%)`, 'info');
+      return;
+    }
+    
+    if(lowerText.includes('category') || lowerText.includes('categories')){
+      const topCategory = getTopSpendingCategory();
+      showAdvancedToast(`🏆 Top Spending Category:\n\n💰 ${topCategory.name}: ₹${topCategory.amount.toFixed(2)}`, 'info');
+      return;
+    }
+  }
+
+  // Add expense commands with enhanced parsing
+  if(lowerText.includes('add') && (lowerText.includes('expense') || lowerText.includes('spending') || lowerText.includes('cost'))){
+    // Enhanced parsing for natural language
+    const dateMatch = text.match(/\d{4}-\d{2}-\d{2}/) || text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const numMatch = text.match(/(\d+(?:\.\d+)?)/);
+    const foundCat = categories.find(c => {
+      const catLower = c.toLowerCase();
+      return lowerText.includes(catLower.split(' ')[0]) || lowerText.includes(catLower) || 
+             lowerText.includes(catLower.replace(' & ', ' ').split(' ')[0]);
+    });
+    
+    let date = (new Date()).toISOString().slice(0,10);
+    if(dateMatch) {
+      if(dateMatch[0]) {
+        date = dateMatch[0];
+      } else if(dateMatch.length >= 4) {
+        // Handle MM/DD/YYYY format
+        date = `${dateMatch[3]}-${dateMatch[1].padStart(2, '0')}-${dateMatch[2].padStart(2, '0')}`;
+      }
+    }
+    
+    const amount = numMatch ? parseFloat(numMatch[0]) : 0;
+    
+    if(!foundCat || !amount){
+      showAdvancedToast('Could not parse full details. Opening add form...', 'info');
+      setTimeout(() => openModal(), 1000);
+      return;
+    }
+    
+    // Extract brand and notes from context
+    const brandMatch = text.match(/(?:brand|from|at)\s+([a-zA-Z0-9\s]+?)(?:\s+\d|$)/i);
+    const brand = brandMatch ? brandMatch[1].trim() : '';
+    
+    const notes = text.replace(/\d{4}-\d{2}-\d{2}/g, '').replace(/\d+(?:\.\d+)?/g, '').replace(foundCat, '').replace(brand, '').trim();
+    
+    const rec = { 
+      id: uid(), 
+      date, 
+      category: foundCat, 
+      brand: brand, 
+      amount, 
+      notes: notes || `Added via voice: ${text}`, 
+      createdAt: new Date().toISOString() 
+    };
+    
+    expenses.push(rec); 
+    saveState(); 
+    renderTable(); 
+    showAdvancedToast(`✅ Added expense: ${foundCat} - ₹${amount.toFixed(2)}`, 'success');
+    return;
+  }
+
+  // Help command
+  if(lowerText.includes('help') || lowerText.includes('what can you do') || lowerText.includes('commands')){
+    const helpText = `🎤 Voice Commands Available:\n\n` +
+                     `📊 Compare: "Compare travel vs groceries"\n` +
+                     `💰 Spending: "How much did I spend this month?"\n` +
+                     `➕ Add: "Add expense travel 5000"\n` +
+                     `🏆 Top: "What's my top spending category?"\n` +
+                     `📅 Monthly: "Show this month's spending"\n` +
+                     `❓ Help: "What can you do?" or "Show commands"`;
+    showAdvancedToast(helpText, 'info');
+    return;
+  }
+  
+  // Test command
+  if(lowerText.includes('test') || lowerText.includes('hello')){
+    showAdvancedToast('🎤 Voice recognition is working! Try saying "help" for available commands.', 'success');
+    return;
+  }
+
+  showAdvancedToast("I didn't understand that. Say 'help' for available commands.", 'error');
+}
+
+/* ------------------------------
+   Voice Recognition Setup
+   ------------------------------ */
+function startVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (!SpeechRecognition) {
+    showAdvancedToast('❌ Voice recognition not supported in this browser. Please use Chrome, Edge, or Safari.', 'error');
+    return;
+  }
+  
+  // Check if already listening
+  if (window.isListening) {
+    showAdvancedToast('🎤 Already listening...', 'info');
+    return;
+  }
+  
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+  
+  // Show listening indicator
+  showAdvancedToast('🎤 Listening... Speak now!', 'info');
+  
+  recognition.onstart = function() {
+    console.log('Voice recognition started');
+    window.isListening = true;
+    
+    // Change button appearance to show listening
+    const voiceBtn = document.getElementById('voiceBtn');
+    voiceBtn.textContent = '🔴';
+    voiceBtn.classList.add('listening');
+    voiceBtn.style.animation = 'pulse 1.5s infinite';
+  };
+  
+  recognition.onresult = function(event) {
+    const transcript = event.results[0][0].transcript;
+    console.log('Voice input:', transcript);
+    
+    // Reset button appearance
+    const voiceBtn = document.getElementById('voiceBtn');
+    voiceBtn.textContent = '🎤 Voice';
+    voiceBtn.classList.remove('listening');
+    voiceBtn.style.animation = '';
+    
+    showAdvancedToast(`🎤 Heard: "${transcript}"`, 'info');
+    
+    // Process the voice command
+    setTimeout(() => {
+      handleVoiceCommand(transcript);
+    }, 1000);
+  };
+  
+  recognition.onerror = function(event) {
+    console.error('Voice recognition error:', event.error);
+    window.isListening = false;
+    
+    // Reset button appearance
+    const voiceBtn = document.getElementById('voiceBtn');
+    voiceBtn.textContent = '🎤 Voice';
+    voiceBtn.classList.remove('listening');
+    voiceBtn.style.animation = '';
+    
+    let errorMessage = 'Voice recognition error';
+    if (event.error === 'not-allowed') {
+      errorMessage = '❌ Microphone access denied. Please allow microphone access and try again.';
+    } else if (event.error === 'no-speech') {
+      errorMessage = '❌ No speech detected. Please try speaking again.';
+    } else if (event.error === 'network') {
+      errorMessage = '❌ Network error. Please check your internet connection.';
+    } else if (event.error === 'audio-capture') {
+      errorMessage = '❌ No microphone found. Please check your microphone connection.';
+    } else if (event.error === 'aborted') {
+      errorMessage = '❌ Voice recognition was aborted. Please try again.';
+    }
+    
+    showAdvancedToast(errorMessage, 'error');
+  };
+  
+  recognition.onend = function() {
+    console.log('Voice recognition ended');
+    window.isListening = false;
+    
+    // Reset button appearance
+    const voiceBtn = document.getElementById('voiceBtn');
+    voiceBtn.textContent = '🎤 Voice';
+    voiceBtn.classList.remove('listening');
+    voiceBtn.style.animation = '';
+  };
+  
+  try {
+    recognition.start();
+  } catch (error) {
+    console.error('Error starting voice recognition:', error);
+    window.isListening = false;
+    showAdvancedToast('❌ Error starting voice recognition. Please try again.', 'error');
+  }
+}
+
+// Voice button event listener is already set up in wireEvents()
+
+function sumByCategoryName(name){
+  return expenses.filter(e=> (e.category||'').toLowerCase().includes(name.toLowerCase())).reduce((s,e)=>s+Number(e.amount||0),0);
+}
+
+/* ------------------------------
+   Navigation & New Features
+   ------------------------------ */
+function handleNavigation(section) {
+  console.log('Navigating to:', section);
+  
+  // Placeholder for future section implementations
+  switch(section) {
+    case 'dashboard':
+      showAdvancedToast('📊 Dashboard - Overview of all financial data', 'info');
+      break;
+    case 'expenses':
+      showAdvancedToast('💸 Expenses - Current expense management view', 'info');
+      break;
+    case 'budgets':
+      showAdvancedToast('🎯 Budgets - Set and track spending limits', 'info');
+      break;
+    case 'investments':
+      showAdvancedToast('📈 Investments - Portfolio tracking and analysis', 'info');
+      break;
+    case 'goals':
+      showAdvancedToast('🎯 Goals - Financial goal setting and progress', 'info');
+      break;
+    case 'reports':
+      showAdvancedToast('📋 Reports - Comprehensive financial reports', 'info');
+      break;
+    default:
+      showAdvancedToast('🚀 Welcome to FlowTrack Financial Suite!', 'info');
+  }
+}
+
+function showNotifications() {
+  const notifications = [
+    '💰 Budget alert: You\'re 80% through your monthly budget',
+    '📈 Investment update: Your portfolio gained 2.3% this week',
+    '🎯 Goal milestone: You\'re 75% to your savings goal',
+    '💳 Bill reminder: Credit card payment due in 3 days'
+  ];
+  
+  const notificationText = notifications.join('\n\n');
+  showAdvancedToast(`🔔 Recent Notifications:\n\n${notificationText}`, 'info');
+}
+
+function showSettings() {
+  const settingsOptions = [
+    '⚙️ Account Settings',
+    '🔒 Privacy & Security',
+    '💳 Payment Methods',
+    '📱 Notifications',
+    '🌍 Language & Region',
+    '💾 Data Export/Import'
+  ];
+  
+  const settingsText = settingsOptions.join('\n');
+  showAdvancedToast(`⚙️ Settings Menu:\n\n${settingsText}\n\nClick any option to configure`, 'info');
+}
+
+function showUserMenu() {
+  const userOptions = [
+    '👤 Profile Settings',
+    '🔑 Change Password',
+    '💳 Billing & Subscription',
+    '📊 Usage Statistics',
+    '❓ Help & Support',
+    '🚪 Sign Out'
+  ];
+  
+  const userText = userOptions.join('\n');
+  showAdvancedToast(`👤 User Menu:\n\n${userText}\n\nClick any option to proceed`, 'info');
+}
+
+// Helper functions for enhanced voice commands
+function getCurrentMonthTotal(list = expenses) {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  return list.filter(e => {
+    const expenseDate = new Date(e.date);
+    return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+  }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+}
+
+function getLastMonthTotal() {
+  const now = new Date();
+  const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+  const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  
+  return expenses.filter(e => {
+    const expenseDate = new Date(e.date);
+    return expenseDate.getMonth() === lastMonth && expenseDate.getFullYear() === lastMonthYear;
+  }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+}
+
+function getMonthlyAverage(category) {
+  const categoryExpenses = expenses.filter(e => e.category === category);
+  if (categoryExpenses.length === 0) return 0;
+  
+  const total = categoryExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const months = new Set(categoryExpenses.map(e => e.date.substring(0, 7))).size; // YYYY-MM format
+  return months > 0 ? total / months : total;
+}
+
+function getTopSpendingCategory(list = expenses) {
+  const categoryTotals = {};
+  list.forEach(e => {
+    const cat = e.category || 'Other';
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(e.amount || 0);
+  });
+  
+  const topCategory = Object.entries(categoryTotals)
+    .sort(([,a], [,b]) => b - a)[0];
+  
+  if (!topCategory) return { name: '—', amount: 0 };
+  return { name: topCategory[0], amount: topCategory[1] };
+}
+
+function showAdvancedToast(message, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = `toast toast-${type}`;
+  toast.style.display = 'block';
+  
+  // Auto-hide after 5 seconds for longer messages
+  const hideTime = message.length > 100 ? 5000 : 3000;
+  setTimeout(() => {
+    toast.style.display = 'none';
+  }, hideTime);
+}
+
+/* ------------------------------
+   Theme toggle & other UI wiring
+   ------------------------------ */
+document.getElementById('themeToggle').addEventListener('click', ()=>{ settings.theme = settings.theme === 'light' ? 'dark' : 'light'; saveState(); applyTheme(); toast('Theme set'); });
+document.getElementById('shortcutsBtn').addEventListener('click', ()=>{
+  const help = [
+    'Esc: Close modal',
+    'Alt+T: Toggle theme',
+    'Alt+A: Add Expense',
+    'Alt+F: Focus Search',
+    'Alt+S: Save in modal',
+    'Alt+E: Export CSV',
+    'Alt+V: Voice command',
+    'Alt+C: Clear filters',
+    'Alt+G: Go to charts',
+    'Alt+L: Go to saved filters',
+    'Alt+/: Show shortcuts'
+  ].join('\n');
+  showAdvancedToast(`⌨️ Shortcuts:\n\n${help}`, 'info');
+});
+
+/* modal backdrop click to close when clicking outside modal */
+document.getElementById('modalBackdrop').addEventListener('click', function(ev){
+  if(ev.target === this) closeModal();
+});
+
+/* small debounce */
+function debounce(fn, ms=200){
+  let t;
+  return function(...a){ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
+}
+
+/* defaults (sample data) */
+function prepareDefaults(){
+  if(!Array.isArray(expenses)) expenses=[];
+  if(expenses.length===0){
+    expenses.push(
+      { id: uid(), date:'2024-04-24', category:'Travel & Booking', brand:'AirX', amount:4500, notes:'Flight', createdAt:new Date().toISOString() },
+      { id: uid(), date:'2024-04-20', category:'Groceries & General', brand:'SuperMart', amount:820, notes:'Grocery run', createdAt:new Date().toISOString() },
+      { id: uid(), date:'2024-04-18', category:'Clothing', brand:'ShoeLand', amount:2999, notes:'Shoes', createdAt:new Date().toISOString() }
+    );
+    saveState();
+  }
+}
+
+/* handy keyboard: Esc closes modal */
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ closeModal(); } });
+
+// Keyboard shortcuts (Alt+Key): T toggle theme, A add expense, F focus search, S save in modal,
+// E export CSV, V voice, C clear filters, G scroll charts, L saved filters.
+document.addEventListener('keydown', function(e){
+  if (!e.altKey) return;
+  const key = (e.key || '').toLowerCase();
+  const activeTag = (document.activeElement && document.activeElement.tagName) || '';
+
+  // Allow Alt+S even inside inputs to submit modal; others ignore when typing
+  if (key !== 's' && /(INPUT|TEXTAREA|SELECT)/.test(activeTag)) return;
+
+  switch (key) {
+    case 't': // Toggle theme
+      e.preventDefault();
+      settings.theme = settings.theme === 'light' ? 'dark' : 'light';
+      saveState();
+      applyTheme();
+      toast('Theme set');
+      break;
+    case 'a': // Open Add Expense
+      e.preventDefault();
+      openModal();
+      break;
+    case 'f': // Focus global search and show it
+      e.preventDefault();
+      const searchWrap = document.querySelector('.search');
+      if (searchWrap) searchWrap.style.display = '';
+      const searchInput = document.getElementById('globalSearch');
+      if (searchInput) { searchInput.focus(); searchInput.select && searchInput.select(); }
+      break;
+    case 's': // Save in modal if open
+      const backdrop = document.getElementById('modalBackdrop');
+      const isOpen = backdrop && backdrop.style.display === 'flex';
+      if (isOpen) {
+        e.preventDefault();
+        const form = document.getElementById('modalForm');
+        if (form && form.requestSubmit) form.requestSubmit(); else if (form) form.submit();
+      }
+      break;
+    case 'e': // Export CSV
+      e.preventDefault();
+      const csvBtn = document.getElementById('exportCsv');
+      if (csvBtn) csvBtn.click();
+      break;
+    case 'v': // Voice command
+      e.preventDefault();
+      startVoice();
+      break;
+    case 'c': // Clear filters
+      e.preventDefault();
+      const fc = document.getElementById('filterCategory');
+      const fb = document.getElementById('filterBrand');
+      const ff = document.getElementById('filterFrom');
+      const ft = document.getElementById('filterTo');
+      if (fc) fc.value = '';
+      if (fb) fb.value = '';
+      if (ff) ff.value = '';
+      if (ft) ft.value = '';
+      renderTable();
+      toast('Filters cleared');
+      break;
+    case 'g': // Toggle charts visibility
+      e.preventDefault();
+      const charts = document.querySelector('.charts');
+      if (charts) {
+        charts.style.display = charts.style.display === 'none' ? 'grid' : 'none';
+        if (charts.style.display === 'grid') {
+          renderCharts();
+        }
+      }
+      break;
+    case 'l': // Scroll to saved filters
+      e.preventDefault();
+      const savedList = document.getElementById('savedFiltersList');
+      if (savedList) savedList.scrollIntoView({ behavior: 'smooth' });
+      break;
+    default:
+      // Alt+/ show shortcuts help
+      if (e.key === '/') {
+        e.preventDefault();
+        const help = [
+          'Esc: Close modal',
+          'Alt+T: Toggle theme',
+          'Alt+A: Add Expense',
+          'Alt+F: Focus Search',
+          'Alt+S: Save in modal',
+          'Alt+E: Export CSV',
+          'Alt+V: Voice command',
+          'Alt+C: Clear filters',
+          'Alt+G: Go to charts',
+          'Alt+L: Go to saved filters',
+          'Alt+/: Show shortcuts'
+        ].join('\n');
+        showAdvancedToast(`⌨️ Shortcuts:\n\n${help}`, 'info');
+      }
+      break;
+  }
+});
+
+/* Floating Action Button */
+document.getElementById('fab').addEventListener('click', function() {
+  const fab = this;
+  
+  // Check if already expanded
+  if (fab.classList.contains('fab-expanded')) {
+    // Collapse back to normal
+    fab.classList.remove('fab-expanded');
+    fab.innerHTML = '➕';
+    return;
+  }
+  
+  // Expand the FAB
+  fab.classList.add('fab-expanded');
+  fab.innerHTML = `
+    <div class="fab-content">
+      <div class="fab-item" onclick="openModal()">
+        <span class="icon">➕</span>
+        <span>Add Expense</span>
+      </div>
+      <div class="fab-item" onclick="document.querySelector('.charts').scrollIntoView({ behavior: 'smooth' })">
+        <span class="icon">📊</span>
+        <span>View Charts</span>
+      </div>
+      <div class="fab-item" onclick="document.querySelector('.export-box').scrollIntoView({ behavior: 'smooth' })">
+        <span class="icon">💾</span>
+        <span>Export Data</span>
+      </div>
+      <div class="fab-item" onclick="startVoice()">
+        <span class="icon">🎤</span>
+        <span>Voice Command</span>
+      </div>
+    </div>
+  `;
+  
+  // Auto-collapse after 5 seconds
+  setTimeout(() => {
+    if (fab.classList.contains('fab-expanded')) {
+      fab.classList.remove('fab-expanded');
+      fab.innerHTML = '➕';
+    }
+  }, 5000);
+  
+  // Collapse when clicking outside
+  setTimeout(() => {
+    document.addEventListener('click', function closeFab(e) {
+      if (!fab.contains(e.target)) {
+        fab.classList.remove('fab-expanded');
+        fab.innerHTML = '➕';
+        document.removeEventListener('click', closeFab);
+      }
+    });
+  }, 100);
+});
+
+/* init app */
+init();
+
+</script>
+</body>
+</html>
